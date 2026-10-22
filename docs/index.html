@@ -19,8 +19,12 @@
   <!-- Project Custom CSS -->
   <link rel="stylesheet" href="style.css?v=2">
 
+  <!-- Datasets Namespace Initialization -->
+  <script>window.DATASETS = window.DATASETS || {};</script>
   <!-- Calculated Model Data from local CSV (No hardcoding) -->
-  <script src="model_data.js?v=2"></script>
+  <script src="model_data.js?v=4"></script>
+  <!-- Parkinson's Telemonitoring Model Data (Second Problem) -->
+  <script src="parkinsons_data.js?v=2"></script>
 </head>
 <body>
 
@@ -54,19 +58,89 @@
 
   <div class="container">
 
-    <!-- Dataset Information Summary Bar -->
+    <!-- Dataset Switcher Dropdown Bar -->
     <div class="dataset-switcher-bar">
       <div class="dataset-switcher-content">
-        <span class="dataset-switcher-title" style="font-size: 15px; font-weight: 700; color: var(--slate-900);">
+        <span class="dataset-switcher-title">
           <i class="fa-solid fa-database" style="color: var(--primary);"></i>
-          Dataset: Student Performance Challenge (Productivity Score Prediction)
+          Dataset Selection:
         </span>
+        <div class="dataset-select-container">
+          <select id="datasetSelect" class="dataset-select-input">
+            <option value="student_performance" selected>🎓 Student Performance (Productivity Score • 16,000 rows • 17 predictors)</option>
+            <option value="parkinsons">🧠 Parkinson's Telemonitoring (Motor UPDRS • 5,875 rows • 19 features)</option>
+            <option value="custom_dataset">📁 Custom Dataset (Public CSV URL / Upload)</option>
+          </select>
+          <i class="fa-solid fa-chevron-down dataset-select-icon"></i>
+        </div>
       </div>
       <div class="dataset-switcher-info" id="datasetQuickSummary">
         <span class="badge-tag badge-blue"><i class="fa-solid fa-layer-group"></i> 16,000 Rows • 17 Predictors (k=1..17)</span>
         <span class="badge-tag badge-purple"><i class="fa-solid fa-rotate"></i> 5-Fold Cross Validation</span>
         <span class="badge-tag badge-green"><i class="fa-solid fa-award"></i> Best-Case Sweet Spot: k = 6 (LassoCV)</span>
         <span class="badge-tag badge-amber"><i class="fa-solid fa-shield-halved"></i> 95% Prediction Interval</span>
+      </div>
+    </div>
+
+    <!-- Custom Dataset Import & Configuration Panel -->
+    <div id="customDatasetPanel" class="custom-dataset-panel" style="display: none;">
+      <div class="custom-panel-header">
+        <div class="custom-panel-title">
+          <i class="fa-solid fa-file-csv" style="color: var(--primary);"></i>
+          <span>Import Custom Dataset for Regression Analysis</span>
+        </div>
+        <span class="badge-tag badge-green"><i class="fa-solid fa-bolt"></i> Pure Client-side JS</span>
+      </div>
+      <div class="custom-panel-body">
+        <div class="custom-input-row">
+          <div class="custom-input-col" style="flex: 1;">
+            <label class="custom-label" for="customCsvUrl">Public CSV URL:</label>
+            <input type="text" id="customCsvUrl" class="input-field"
+              placeholder="https://example.com/data.csv"
+              value="https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv">
+          </div>
+          <div class="custom-btn-col">
+            <button id="btnFetchCsv" class="custom-btn custom-btn-primary">
+              <i class="fa-solid fa-cloud-arrow-down"></i> Fetch &amp; Preview
+            </button>
+            <label class="custom-btn custom-btn-secondary" style="cursor: pointer; margin: 0;">
+              <i class="fa-solid fa-folder-open"></i> Upload File
+              <input type="file" id="customCsvFile" accept=".csv" style="display: none;">
+            </label>
+          </div>
+        </div>
+
+        <!-- Status Message Box -->
+        <div id="customStatusMsg" class="custom-status-msg" style="display: none;"></div>
+
+        <!-- Dataset Schema & Target Selector (Shown after fetch) -->
+        <div id="customConfigSection" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1.5px dashed var(--slate-200);">
+          <div class="custom-preview-summary">
+            <span id="customDataMeta" class="badge-tag badge-blue"></span>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <label for="customTargetSelect" style="font-size: 13px; font-weight: 700; color: var(--slate-800);">
+                Select Prediction Target (Y):
+              </label>
+              <select id="customTargetSelect" class="input-field" style="width: auto; padding: 7px 14px; font-weight: 600;">
+                <!-- Populated dynamically -->
+              </select>
+              <button id="btnRunCustomRegression" class="custom-btn custom-btn-success">
+                <i class="fa-solid fa-play"></i> Run Regression Analysis
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview Table Container -->
+          <div style="margin-top: 14px;">
+            <span style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-500);">Data Preview (First 5 Rows):</span>
+            <div class="table-responsive" style="margin-top: 6px; max-height: 180px;">
+              <table class="data-table" id="customPreviewTable">
+                <thead><tr id="customPreviewHeader"></tr></thead>
+                <tbody id="customPreviewBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -526,7 +600,7 @@
   </footer>
 
   <!-- Application Script -->
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=7"></script>
 
 </body>
 </html>

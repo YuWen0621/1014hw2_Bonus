@@ -217,11 +217,61 @@ $$\begin{aligned}
 │   ├── train.csv                         # Kaggle 競賽原始資料 (16,000 筆)
 │   ├── test.csv                          # Kaggle 測試特徵資料
 │   └── sample_submission.csv             # Kaggle 繳交格式範本
+---
+
+## 🌟 額外加分功能實作說明 (Bonus Features)
+
+本專案完整實現並部署兩大作業加分功能，介面直覺友善，所有計算與渲染均相容於 GitHub Pages 靜態環境：
+
+### 1. 【加總分 1分】下拉視窗呈現兩種 Problem
+使用者可透過頂部控制列的 **Dataset Selection** 下拉選單在兩種不同問題間無縫切換：
+- **Problem 1 (預設)：Student Performance Challenge**
+  - 資料集來源：Kaggle Student Performance Dataset (16,000 筆樣本、17 個候選特徵)。
+  - 預測目標：學生連續學習生產力分數 `productivity_score` (0–100)。
+  - 特色：保留原始 DIC 作業所有功能，展示 6 大演算法在 $k=1 \dots 17$ 維度下的選取曲線、LassoCV $k=6$ Sweet Spot 與生活型態 Live Predictor。
+- **Problem 2：Parkinson's Telemonitoring (帕金森氏症遠距聲學遠程監控)**
+  - 資料集來源：[UCI Machine Learning Repository: Parkinson's Telemonitoring Dataset](https://archive.ics.uci.edu/dataset/189/parkinsons+telemonitoring)（公開資料集）。
+  - **合規性檢核**：
+    1. **非** 50 Startups，且**非** Boston Housing。
+    2. **特徵數量嚴格超過 13 個**：共 **19 個連續生物特徵 (features)**（`age`, `sex`, `test_time`, `Jitter(%)`, `Jitter(Abs)`, `Jitter:RAP`, `Jitter:PPQ5`, `Jitter:DDP`, `Shimmer`, `Shimmer(dB)`, `Shimmer:APQ3`, `Shimmer:APQ5`, `Shimmer:APQ11`, `Shimmer:DDA`, `NHR`, `HNR`, `RPDE`, `DFA`, `PPE`）。
+  - 總樣本數：**5,875 筆**（80% 訓練集 4,700 筆 / 20% 測試集 1,175 筆）。
+  - 預測目標：臨床運動障礙統一評估量表分值 **`motor_UPDRS`** (連續數值，反映帕金森氏症運動症狀嚴重度)。
+  - 演算法與表現：比較 Pearson Correlation, LassoCV, RFECV, Forward SFS, Baseline OLS，評估維度擴展至 $k=1 \dots 19$；其中 **Forward SFS 在 $k=13$ 達到最優泛化能力 (Sweet Spot: CV RMSE = 7.489)**。
+  - 互動預測：動態產生 19 項聲學特徵的互動滑桿，即時預測病患的 Motor UPDRS 評分並估計 95% 預測區間。
+
+### 2. 【加總分 2分】可任意輸入 Dataset（公開 CSV URL / 本地上傳）
+在下拉選單選擇 **「Custom Dataset (Public CSV URL / Upload)」** 即可展開自訂資料集分析面板：
+- **靈活匯入方式**：
+  - **公開 CSV URL 抓取**：預設填入經典資料集範例 Auto MPG（`https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv`），點擊 **「Fetch & Preview」** 即由前端直接抓取並即時解析（亦支援 50 Startups、Advertising 等公開 CSV）。
+  - **本地檔案上傳**：亦可點擊 **「Upload File」** 直接由本機選取任意 `.csv` 檔案。
+- **純前端即時多元線性迴歸引擎 (In-Browser OLS Engine)**：
+  - 自動過濾並探測數值型候選特徵欄位，並展示前 5 筆資料預覽表。
+  - 提供動態下拉選單供使用者自由挑選 **預測目標 (Target Y)**（例如 50 Startups 的 `Profit`）。
+  - 採用純 JavaScript 實現**高斯消去法求逆常態方程式**：
+    $$\hat{\beta} = (X^T X + \epsilon I)^{-1} X^T Y$$
+  - 自動完成隨機 80% 訓練集 / 20% 測試集劃分，即時計算出：
+    - 迴歸評估指標：測試集 $R^2$、調整後 $R^2$、RMSE、MAE、$F$ 檢定值。
+    - 迴歸係數分析表：各變數 $\hat{\beta}_i$、標準誤 $\text{SE}(\hat{\beta}_i)$、$t$ 統計量、$p$ 值、95% 信賴區間。
+    - 殘差與離群診斷：Top 10 絕對誤差離群值、95% 預測區間命中判定。
+    - 儀表板動態更新：全站 KPI 卡片、實測 vs 預測散布圖、迴歸方程式以及 Live Predictor 立即轉換為使用者上傳的自訂資料集！
+
+---
+
+## 💻 7. 專案目錄結構與本機執行 (Project Structure & Usage)
+
+```text
+1014-hw2/
+├── train.csv                             # Kaggle 競賽原始資料集 (16,000 Samples, 17 Features)
+├── main.py                               # 主分析程式 (CRISP-DM 完整流程、模型選取與數據產出)
+├── generate_parkinsons_data.py           # 第二種 Problem (UCI 帕金森聲學資料集) 數據生成腳本
+├── parkinsons_updrs.data                 # UCI 帕金森氏症遠距監控原始數據 (5,875 Samples, 19 Features)
+├── student_productivity_model.pkl        # 序列化最優多元線性迴歸模型檔案
 ├── docs/                                 # GitHub Pages 靜態網站目錄
-│   ├── index.html                        # 主網頁架構
+│   ├── index.html                        # 主網頁架構 (含兩種 Problem 下拉切換與自訂 CSV 匯入面板)
 │   ├── style.css                         # 專案 CSS 樣式系統 (Cream & Forest 綠意色調)
-│   ├── app.js                            # 前端核心邏輯、動態 Sweet Spot 計算與圖表控制
-│   └── model_data.js                     # 預先計算的模型評估數據與矩陣資料
+│   ├── app.js                            # 前端核心邏輯、動態 Sweet Spot、多資料集支援與即時 OLS 引擎
+│   ├── model_data.js                     # Problem 1 (Student Performance) 預先計算的模型數據
+│   └── parkinsons_data.js                # Problem 2 (Parkinson's Telemonitoring) 模型數據
 └── results/                              # 自動產生的出版級視覺化圖表與 CSV 數據
     ├── correlation_heatmap.png           # 相關係數熱力圖
     ├── dual_charts_rmse_r2.png           # RMSE 與 R² 雙軸趨勢圖

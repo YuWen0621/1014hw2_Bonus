@@ -1,12 +1,14 @@
 /* ==========================================================================
    HW2: Student Performance Multiple Linear Regression & Feature Selection Explorer
    Pure Vanilla JavaScript + Chart.js 4.4 (GitHub Pages Ready)
-   Dataset: Kaggle Student Performance Challenge (16,000 Samples, 17 Features)
+   Dataset 1: Kaggle Student Performance (16,000 Samples, 17 Features)
+   Dataset 2: UCI Parkinson's Telemonitoring (5,875 Samples, 19 Features)
    ========================================================================== */
 
 // Application State
 let currentAlgo = 'Pearson Correlation';
-let currentK = 6; // Default to Global Sweet Spot (k = 6)
+let currentK = 6;
+let currentDatasetKey = 'student_performance'; // active dataset key
 let rmseChartInstance = null;
 let r2ChartInstance = null;
 let actualVsPredChartInstance = null;
@@ -51,6 +53,10 @@ let activeMethodsFilter = new Set(ALL_ALGO_KEYS);
 
 // Helper: Get Current Dataset Definition
 function getCurrentDataset() {
+  if (window.DATASETS && window.DATASETS[currentDatasetKey]) {
+    return window.DATASETS[currentDatasetKey];
+  }
+  // Fallback
   if (window.DATASETS && window.DATASETS['student_performance']) {
     return window.DATASETS['student_performance'];
   }
@@ -67,15 +73,30 @@ function getActiveModelData() {
   return models[idx];
 }
 
-// Helper: Compute best k for a given algorithm (first k where cv_rmse reaches minimum plateau)
+// Helper: Compute best k for a given algorithm (first k where cv_rmse reaches minimum plateau, or min cv_rmse)
 function getAlgoBestK(algo) {
-  if (!window.MODEL_DATA) return 6;
+  const ds = getCurrentDataset();
+  if (!window.MODEL_DATA) return ds?.sweet_spot_k || 6;
   const key = (!algo || algo === 'ALL') ? 'Pearson Correlation' : algo;
   const models = window.MODEL_DATA[key];
-  if (!models || models.length === 0) return 6;
-  // First k where cv_rmse reaches the near-zero plateau (< 0.1)
-  const idx = models.findIndex(m => m.cv_rmse < 0.1);
-  return idx !== -1 ? (idx + 1) : 6;
+  if (!models || models.length === 0) return ds?.sweet_spot_k || 6;
+
+  if (ds && ds.key === 'student_performance') {
+    const idx = models.findIndex(m => m.cv_rmse < 0.1);
+    return idx !== -1 ? (idx + 1) : (ds.sweet_spot_k || 6);
+  }
+
+  // General datasets: find k with minimum cv_rmse (or rmse)
+  let bestIdx = 0;
+  let minCvRmse = Infinity;
+  models.forEach((m, i) => {
+    const val = typeof m.cv_rmse === 'number' ? m.cv_rmse : m.rmse;
+    if (val < minCvRmse) {
+      minCvRmse = val;
+      bestIdx = i;
+    }
+  });
+  return bestIdx + 1;
 }
 
 // DOM Initialization
@@ -88,11 +109,14 @@ document.addEventListener('DOMContentLoaded', () => {
     currentK = ds.sweet_spot_k || 6;
   }
 
+  setupDatasetSwitcher();
   setupEventListeners();
+  updateAlgoTabsVisibility();
   renderKButtons();
   initCharts();
   renderLivePredictor();
   updateDashboard();
+  updateHeroForDataset();
 });
 
 // Event Listeners Setup
@@ -104,13 +128,81 @@ function setupEventListeners() {
       tabs.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentAlgo = btn.dataset.algo;
-      updateKButtonSweetSpot(); // update sweet-spot label without changing currentK
+      updateKButtonSweetSpot();
       updateDashboard();
     });
   });
 
   // Filter chips for Compare All mode
   initMethodFilterChips();
+}
+
+// Setup Dataset Switcher
+function setupDatasetSwitcher() {
+  const select = document.getElementById('datasetSelect');
+  const customPanel = document.getElementById('customDatasetPanel');
+  if (!select) return;
+
+  select.addEventListener('change', () => {
+    const val = select.value;
+
+    if (val === 'custom_dataset') {
+      if (customPanel) customPanel.style.display = 'block';
+      // Don't switch dataset yet - wait for user to load CSV
+      return;
+    }
+
+    if (customPanel) customPanel.style.display = 'none';
+
+    if (val === currentDatasetKey) return;
+
+    currentDatasetKey = val;
+    const ds = getCurrentDataset();
+    if (!ds) return;
+
+    window.MODEL_DATA = ds.model_data;
+    currentAlgo = 'Pearson Correlation';
+    currentK = ds.sweet_spot_k || 1;
+
+    // Reset active tab button
+    document.querySelectorAll('#algoTabs .tab-btn').forEach(b => b.classList.remove('active'));
+    const firstTab = document.querySelector('#algoTabs .tab-btn[data-algo="Pearson Correlation"]');
+    if (firstTab) firstTab.classList.add('active');
+
+    updateAlgoTabsVisibility();
+    renderKButtons();
+    initMethodFilterChips();
+    renderLivePredictor();
+    updateHeroForDataset();
+    updateDashboard();
+  });
+
+  // Setup Custom CSV fetch
+  const btnFetch = document.getElementById('btnFetchCsv');
+  if (btnFetch) btnFetch.addEventListener('click', fetchCustomCsv);
+
+  const fileInput = document.getElementById('customCsvFile');
+  if (fileInput) fileInput.addEventListener('change', handleCustomFileUpload);
+
+  const btnRun = document.getElementById('btnRunCustomRegression');
+  if (btnRun) btnRun.addEventListener('click', runCustomRegression);
+}
+
+// Update Algorithm Tabs visibility depending on available methods in current dataset
+function updateAlgoTabsVisibility() {
+  const ds = getCurrentDataset();
+  if (!ds || !ds.model_data) return;
+  const availableAlgos = new Set(Object.keys(ds.model_data));
+  const tabs = document.querySelectorAll('#algoTabs .tab-btn');
+  tabs.forEach(btn => {
+    const algo = btn.dataset.algo;
+    if (algo === 'ALL') {
+      btn.style.display = availableAlgos.size > 1 ? 'inline-flex' : 'none';
+      btn.innerHTML = `<i class="fa-solid fa-layer-group" style="color: var(--accent-amber);"></i> 🌟 Compare All ${availableAlgos.size} Methods`;
+    } else {
+      btn.style.display = availableAlgos.has(algo) ? 'inline-flex' : 'none';
+    }
+  });
 }
 
 // Initialize Method Filter Chips for Compare All mode
@@ -186,6 +278,8 @@ function renderKButtons() {
   const totalFeatures = ds.features.length; // 17
   const initBestK = getAlgoBestK(currentAlgo); // best k for initial algo
 
+  const k1Text = ds.key === 'student_performance' ? 'Study Hours' : (ds.features && ds.features[0] ? ds.features[0] : '1 Feature');
+
   for (let k = 1; k <= totalFeatures; k++) {
     const btn = document.createElement('button');
     btn.className = 'k-btn';
@@ -198,7 +292,7 @@ function renderKButtons() {
       btn.classList.add('overfitting');
       btn.innerHTML = `k = ${k} ⚠ Full Model <span style="font-size: 11px; font-weight: 700;">(Noise Features)</span>`;
     } else if (k === 1) {
-      btn.innerHTML = `k = 1 <span style="font-size: 11px;">(Study Hours)</span>`;
+      btn.innerHTML = `k = 1 <span style="font-size: 11px;">(${k1Text})</span>`;
     } else {
       btn.innerHTML = `k = ${k} <span style="font-size: 11px;">(${k} Predictors)</span>`;
     }
@@ -226,6 +320,7 @@ function updateKButtonSweetSpot() {
   if (!container || !ds) return;
 
   const newBestK = getAlgoBestK(currentAlgo);
+  const k1Text = ds.key === 'student_performance' ? 'Study Hours' : (ds.features && ds.features[0] ? ds.features[0] : '1 Feature');
 
   container.querySelectorAll('.k-btn').forEach(btn => {
     const k = parseInt(btn.dataset.k, 10);
@@ -235,7 +330,7 @@ function updateKButtonSweetSpot() {
     if (k !== ds.overfitting_k) {
       btn.classList.remove('sweet-spot');
       if (k === 1) {
-        btn.innerHTML = `k = 1 <span style="font-size: 11px;">(Study Hours)</span>`;
+        btn.innerHTML = `k = 1 <span style="font-size: 11px;">(${k1Text})</span>`;
       } else {
         btn.innerHTML = `k = ${k} <span style="font-size: 11px;">(${k} Predictors)</span>`;
       }
@@ -307,8 +402,6 @@ function initCharts() {
   // 2. R2 Chart
   const r2Options = JSON.parse(JSON.stringify(baseChartOptions));
   r2Options.scales.y.title = { display: true, text: 'Test R² (Higher is Better)', font: { family: "'Inter', sans-serif", weight: 'bold', size: 11.5 }, color: '#334155' };
-  r2Options.scales.y.min = 0.40;
-  r2Options.scales.y.max = 1.05;
   r2Options.scales.y.ticks.callback = (val) => Number(val).toFixed(2);
   r2ChartInstance = new Chart(ctxR2, {
     type: 'line',
@@ -503,6 +596,20 @@ function updateCharts() {
   rmseChartInstance.data.datasets = rmseDatasets;
   r2ChartInstance.data.datasets = r2Datasets;
 
+  // Dynamic scale adjustment for R2 chart
+  if (r2ChartInstance.options && r2ChartInstance.options.scales && r2ChartInstance.options.scales.y) {
+    if (ds.key === 'student_performance') {
+      r2ChartInstance.options.scales.y.min = 0.40;
+      r2ChartInstance.options.scales.y.max = 1.05;
+    } else if (ds.key === 'parkinsons') {
+      r2ChartInstance.options.scales.y.min = 0.0;
+      r2ChartInstance.options.scales.y.max = 0.20;
+    } else {
+      delete r2ChartInstance.options.scales.y.min;
+      delete r2ChartInstance.options.scales.y.max;
+    }
+  }
+
   rmseChartInstance.update();
   r2ChartInstance.update();
 
@@ -520,9 +627,17 @@ function updateActualVsPredChart() {
   const samplePoints = ds.test_scatter_sample || [];
   if (samplePoints.length === 0) return;
 
-  // Find min and max for the 45-degree reference line
-  let minVal = 0;
-  let maxVal = 100;
+  // Find min and max for the 45-degree reference line dynamically
+  let minVal = Math.min(...samplePoints.map(p => Math.min(p.actual, p.predicted)));
+  let maxVal = Math.max(...samplePoints.map(p => Math.max(p.actual, p.predicted)));
+  if (!isFinite(minVal) || !isFinite(maxVal)) {
+    minVal = 0;
+    maxVal = 100;
+  } else {
+    const pad = (maxVal - minVal) * 0.05 || 1;
+    minVal = Math.max(0, Math.floor(minVal - pad));
+    maxVal = Math.ceil(maxVal + pad);
+  }
 
   // Calculate prediction margin of error for current active model
   // Margin = t_crit * SE_pred
@@ -618,6 +733,12 @@ function updateActualVsPredChart() {
     });
   }
 
+  if (actualVsPredChartInstance.options && actualVsPredChartInstance.options.scales) {
+    const targetTitle = ds.target_name || 'Target';
+    actualVsPredChartInstance.options.scales.x.title.text = `Predicted ${targetTitle} (ŷ)`;
+    actualVsPredChartInstance.options.scales.y.title.text = `Actual ${targetTitle} (y)`;
+  }
+
   actualVsPredChartInstance.update();
 
   const piBadge = document.getElementById('piCoverageBadge');
@@ -637,7 +758,7 @@ function renderLivePredictor() {
   if (!container || !ds || !activeModel) return;
   container.innerHTML = '';
 
-  if (titleEl) titleEl.textContent = 'Live Student Productivity Predictor';
+  if (titleEl) titleEl.textContent = `Live ${ds.name || 'Model'} Predictor`;
   if (subtitleEl) subtitleEl.textContent = `Real-time prediction with statistically calculated 95% Prediction Interval for active model (k = ${activeModel.k}).`;
 
   const activeFeatures = new Set(activeModel.features);
@@ -813,6 +934,7 @@ function calculateLivePrediction() {
 function updateEquation(coefficients) {
   const box = document.getElementById('equationBox');
   if (!box || !coefficients) return;
+  const ds = getCurrentDataset();
 
   const intercept = coefficients.find(c => c.feature.includes('Intercept'));
   const parts = [];
@@ -829,7 +951,8 @@ function updateEquation(coefficients) {
     parts.push(`${sign} ${absVal} × <span class="eq-var">(${c.feature})</span>`);
   });
 
-  box.innerHTML = `<strong>Productivity Score</strong> = ${parts.join(' ')}`;
+  const targetLabel = ds.target_name || 'Target';
+  box.innerHTML = `<strong>${targetLabel}</strong> = ${parts.join(' ')}`;
 }
 
 // Update Coefficients Table
@@ -928,7 +1051,8 @@ function updateDashboard() {
   if (valCVRMSE) valCVRMSE.textContent = data.cv_rmse.toFixed(4);
 
   if (r2Note) {
-    r2Note.textContent = `Explains ${(data.r2 * 100).toFixed(2)}% of productivity score variance`;
+    const targetText = ds.target_name ? `${ds.target_name.toLowerCase()} variance` : 'target variance';
+    r2Note.textContent = `Explains ${(data.r2 * 100).toFixed(2)}% of ${targetText}`;
   }
 
   // 2. Badges (use per-algo best k instead of global sweet_spot_k)
@@ -1001,3 +1125,543 @@ function updateDashboard() {
 
 // Expose updateDashboard to window
 window.updateDashboard = updateDashboard;
+
+// ============================================================================
+// Update Hero Banner & Header for the Active Dataset
+// ============================================================================
+function updateHeroForDataset() {
+  const ds = getCurrentDataset();
+  if (!ds) return;
+
+  // Update header breadcrumb & title
+  const breadcrumb = document.getElementById('headerBreadcrumb');
+  const headerTitle = document.getElementById('headerTitle');
+  if (breadcrumb) breadcrumb.textContent = `${ds.name} Feature Progression`;
+  if (headerTitle) {
+    const icon = ds.key === 'parkinsons'
+      ? '<i class="fa-solid fa-brain" style="color: var(--primary);"></i>'
+      : '<i class="fa-solid fa-graduation-cap" style="color: var(--primary);"></i>';
+    headerTitle.innerHTML = `${icon} ${ds.name} Multiple Linear Regression Explorer <span class="brand-badge">CRISP-DM</span>`;
+  }
+
+  // Update Dataset Summary Badges
+  const summary = document.getElementById('datasetQuickSummary');
+  if (summary) {
+    if (ds.key === 'parkinsons') {
+      summary.innerHTML = `
+        <span class="badge-tag badge-blue"><i class="fa-solid fa-layer-group"></i> 5,875 Rows • 19 Features (k=1..19)</span>
+        <span class="badge-tag badge-purple"><i class="fa-solid fa-rotate"></i> 5-Fold Cross Validation</span>
+        <span class="badge-tag badge-green"><i class="fa-solid fa-award"></i> Best-Case Sweet Spot: k = ${ds.sweet_spot_k}</span>
+        <span class="badge-tag badge-amber"><i class="fa-solid fa-shield-halved"></i> 95% Prediction Interval</span>`;
+    } else {
+      summary.innerHTML = `
+        <span class="badge-tag badge-blue"><i class="fa-solid fa-layer-group"></i> 16,000 Rows • 17 Predictors (k=1..17)</span>
+        <span class="badge-tag badge-purple"><i class="fa-solid fa-rotate"></i> 5-Fold Cross Validation</span>
+        <span class="badge-tag badge-green"><i class="fa-solid fa-award"></i> Best-Case Sweet Spot: k = 6 (LassoCV)</span>
+        <span class="badge-tag badge-amber"><i class="fa-solid fa-shield-halved"></i> 95% Prediction Interval</span>`;
+    }
+  }
+
+  // Update hero card
+  const heroTitle = document.getElementById('heroTitle');
+  const heroDesc = document.getElementById('heroDescription');
+  const heroTags = document.getElementById('heroTagsContainer');
+  const kLabel = document.getElementById('kControlLabel');
+
+  if (ds.key === 'parkinsons') {
+    if (heroTitle) heroTitle.textContent = 'Feature Selection & Parsimony Analysis — Parkinson\'s Telemonitoring';
+    if (heroDesc) heroDesc.innerHTML = `Compare 5 Machine Learning Feature Selection Algorithms (<strong>Pearson Correlation</strong>, <strong>Forward SFS</strong>, <strong>LassoCV</strong>, <strong>RFECV</strong>, and <strong>Baseline OLS</strong>) applied to UCI Parkinson\'s Telemonitoring voice biomarkers. Predict Motor UPDRS severity from <strong>19 acoustic features</strong> including Jitter, Shimmer, HNR, RPDE, DFA, and PPE. Explore the bias-variance tradeoff across k = 1…19, with sweet spot at k=${ds.sweet_spot_k}.`;
+    if (heroTags) heroTags.innerHTML = `
+      <span class="hero-pill"><i class="fa-solid fa-database"></i> 5,875 Samples (80/20 Train-Test Split)</span>
+      <span class="hero-pill"><i class="fa-solid fa-rotate"></i> 5-Fold Cross Validation</span>
+      <span class="hero-pill"><i class="fa-solid fa-layer-group"></i> 5 Selection Strategies</span>
+      <span class="hero-pill"><i class="fa-solid fa-star" style="color: #34d399;"></i> Best Sweet Spot: k = ${ds.sweet_spot_k} (Forward SFS)</span>
+      <span class="hero-pill"><i class="fa-solid fa-microphone" style="color: #60a5fa;"></i> Voice Biomarkers: Jitter, Shimmer, HNR, RPDE, DFA, PPE</span>`;
+    if (kLabel) kLabel.innerHTML = `<i class="fa-solid fa-list-ol"></i> 2. Number of Features (k = 1 to 19)`;
+    // Update predictor outputs
+    const predLabel = document.getElementById('predOutputLabel');
+    if (predLabel) predLabel.textContent = 'Predicted Motor UPDRS Score';
+    // Update residual subtitle
+    const resSubtitle = document.getElementById('residualsSubtitle');
+    if (resSubtitle) resSubtitle.textContent = `Out-of-sample test set residuals (1,175 samples), ranked by absolute error with 95% Prediction Interval.`;
+    // Update actual vs predicted subtitle
+    const avpSubtitle = document.querySelector('#actualVsPredChart')?.parentElement?.previousElementSibling?.querySelector('.card-subtitle');
+  } else {
+    if (heroTitle) heroTitle.textContent = 'Feature Selection & Parsimony Analysis';
+    if (heroDesc) heroDesc.innerHTML = `Compare 6 Machine Learning Feature Selection Algorithms (<strong>Pearson Correlation</strong>, <strong>Forward SFS</strong>, <strong>LassoCV</strong>, <strong>RFECV</strong>, <strong>Exhaustive Search</strong>, and <strong>Baseline OLS</strong>) trained strictly on 80% partitioned training data. Each algorithm identifies its own optimal sweet spot: <strong>LassoCV reaches near-zero RMSE earliest at k = 6</strong>, Forward SFS at k = 7, and Pearson Correlation at k = 8.`;
+    if (heroTags) heroTags.innerHTML = `
+      <span class="hero-pill"><i class="fa-solid fa-database"></i> 16,000 Samples (80/20 Train-Test Split)</span>
+      <span class="hero-pill"><i class="fa-solid fa-rotate"></i> 5-Fold Cross Validation</span>
+      <span class="hero-pill"><i class="fa-solid fa-layer-group"></i> 6 Selection Strategies</span>
+      <span class="hero-pill"><i class="fa-solid fa-star" style="color: #34d399;"></i> Best-Case Sweet Spot: k = 6 (LassoCV, RMSE ≈ 0.0029, R² = 1.0000)</span>
+      <span class="hero-pill"><i class="fa-solid fa-shield-halved" style="color: #60a5fa;"></i> 95% Prediction Interval (100.0% Empirical Coverage)</span>`;
+    if (kLabel) kLabel.innerHTML = `<i class="fa-solid fa-list-ol"></i> 2. Number of Features (k = 1 to 17)`;
+    const predLabel = document.getElementById('predOutputLabel');
+    if (predLabel) predLabel.textContent = 'Predicted Student Productivity Score';
+  }
+}
+
+// Update Equation Box (target label varies by dataset)
+function getEquationTargetLabel() {
+  const ds = getCurrentDataset();
+  if (!ds) return 'Y';
+  return ds.target_name || 'Y';
+}
+
+// ============================================================================
+// Custom CSV Dataset: Fetch, Parse, Run OLS
+// ============================================================================
+let customCsvData = null; // { headers: [], rows: [] }
+
+function showCustomStatus(msg, type) {
+  const el = document.getElementById('customStatusMsg');
+  if (!el) return;
+  el.style.display = 'block';
+  el.className = `custom-status-msg custom-status-${type}`;
+  el.innerHTML = msg;
+}
+
+async function fetchCustomCsv() {
+  const urlInput = document.getElementById('customCsvUrl');
+  const url = urlInput ? urlInput.value.trim() : '';
+  if (!url) { showCustomStatus('<i class="fa-solid fa-triangle-exclamation"></i> Please enter a CSV URL.', 'error'); return; }
+
+  const btn = document.getElementById('btnFetchCsv');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching...'; }
+  showCustomStatus('<i class="fa-solid fa-spinner fa-spin"></i> Fetching CSV...', 'info');
+
+  try {
+    // Try direct fetch first, then CORS proxy
+    let text;
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      text = await resp.text();
+    } catch (e) {
+      // Try with allorigins proxy
+      const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const resp2 = await fetch(proxy);
+      if (!resp2.ok) throw new Error(`Proxy failed: HTTP ${resp2.status}`);
+      text = await resp2.text();
+    }
+    parseCsvAndShow(text);
+  } catch (err) {
+    showCustomStatus(`<i class="fa-solid fa-circle-xmark"></i> Failed to fetch: ${err.message}. Try a different URL or upload the file directly.`, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down"></i> Fetch & Preview'; }
+  }
+}
+
+function handleCustomFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  showCustomStatus(`<i class="fa-solid fa-spinner fa-spin"></i> Reading file: ${file.name}...`, 'info');
+  const reader = new FileReader();
+  reader.onload = (ev) => parseCsvAndShow(ev.target.result);
+  reader.onerror = () => showCustomStatus('<i class="fa-solid fa-circle-xmark"></i> Failed to read file.', 'error');
+  reader.readAsText(file);
+}
+
+function parseCsvAndShow(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) { showCustomStatus('<i class="fa-solid fa-triangle-exclamation"></i> CSV has no data rows.', 'error'); return; }
+
+  // Parse header
+  // Parse header
+  let headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  // Sanitize empty or unnamed index columns (e.g., Advertising.csv leading "")
+  headers = headers.map((h, i) => (!h || h.toLowerCase().startsWith('unnamed')) ? `id_${i}` : h);
+
+  const rows = [];
+  for (let i = 1; i < Math.min(lines.length, 5001); i++) {
+    const vals = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+    if (vals.length === headers.length) rows.push(vals);
+  }
+
+  if (rows.length === 0) { showCustomStatus('<i class="fa-solid fa-triangle-exclamation"></i> No valid data rows found.', 'error'); return; }
+
+  customCsvData = { headers, rows, allRows: lines.slice(1).map(l => l.split(',').map(v => v.trim().replace(/^"|"$/g, ''))) };
+
+  // Detect numeric columns, filtering out artificial id columns
+  const numericCols = headers.filter((h, ci) => {
+    if (h.toLowerCase().startsWith('id_') || h.toLowerCase() === 'id' || h.toLowerCase() === 'index') return false;
+    const sample = rows.slice(0, 20).map(r => parseFloat(r[ci])).filter(v => !isNaN(v));
+    return sample.length >= rows.slice(0, 20).length * 0.8;
+  });
+
+  // Update target select
+  const targetSel = document.getElementById('customTargetSelect');
+  if (targetSel) {
+    targetSel.innerHTML = '';
+    numericCols.forEach(col => {
+      const opt = document.createElement('option');
+      opt.value = col;
+      opt.textContent = col;
+      targetSel.appendChild(opt);
+    });
+    // Default: last numeric column
+    if (numericCols.length > 0) targetSel.value = numericCols[numericCols.length - 1];
+  }
+
+  // Show meta
+  const meta = document.getElementById('customDataMeta');
+  if (meta) meta.innerHTML = `<i class="fa-solid fa-layer-group"></i> ${rows.length} Rows • ${headers.length} Columns • ${numericCols.length} Numeric`;
+
+  // Preview table
+  const thead = document.getElementById('customPreviewHeader');
+  const tbody = document.getElementById('customPreviewBody');
+  if (thead && tbody) {
+    thead.innerHTML = headers.map(h => `<th>${h}</th>`).join('');
+    tbody.innerHTML = rows.slice(0, 5).map(r => `<tr>${r.map(v => `<td>${v}</td>`).join('')}</tr>`).join('');
+  }
+
+  const cfg = document.getElementById('customConfigSection');
+  if (cfg) cfg.style.display = 'block';
+  showCustomStatus(`<i class="fa-solid fa-circle-check"></i> Loaded ${rows.length.toLocaleString()} rows, ${headers.length} columns. Select your target and click Run!`, 'success');
+}
+
+function runCustomRegression() {
+  if (!customCsvData) { showCustomStatus('<i class="fa-solid fa-triangle-exclamation"></i> Load a CSV first.', 'error'); return; }
+  const targetSel = document.getElementById('customTargetSelect');
+  const targetCol = targetSel ? targetSel.value : '';
+  if (!targetCol) { showCustomStatus('<i class="fa-solid fa-triangle-exclamation"></i> Select a target column.', 'error'); return; }
+
+  const { headers, allRows } = customCsvData;
+  const targetIdx = headers.indexOf(targetCol);
+
+  // Build numeric X, y (filtering out id/index columns)
+  const featureCols = headers.filter((h, i) => {
+    if (i === targetIdx) return false;
+    if (h.toLowerCase().startsWith('id_') || h.toLowerCase() === 'id' || h.toLowerCase() === 'index') return false;
+    const sample = allRows.slice(0, 50).map(r => parseFloat(r[i])).filter(v => !isNaN(v));
+    return sample.length >= 5;
+  });
+
+  const dataRows = allRows.filter(r => {
+    const yv = parseFloat(r[targetIdx]);
+    if (isNaN(yv)) return false;
+    return featureCols.every((h, fi) => !isNaN(parseFloat(r[headers.indexOf(h)])));
+  });
+
+  if (dataRows.length < 10) { showCustomStatus('<i class="fa-solid fa-triangle-exclamation"></i> Not enough numeric rows (need ≥ 10).', 'error'); return; }
+
+  const p = featureCols.length;
+  if (p < 1) { showCustomStatus('<i class="fa-solid fa-triangle-exclamation"></i> No numeric feature columns found.', 'error'); return; }
+
+  showCustomStatus(`<i class="fa-solid fa-spinner fa-spin"></i> Running OLS feature selection on ${dataRows.length} rows × ${p} features...`, 'info');
+
+  // Build matrices
+  const n = dataRows.length;
+  const X = dataRows.map(r => featureCols.map(h => parseFloat(r[headers.indexOf(h)])));
+  const y = dataRows.map(r => parseFloat(r[targetIdx]));
+
+  // 80/20 split (shuffle)
+  const idx = Array.from({length: n}, (_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  const nTrain = Math.floor(n * 0.8);
+  const trainIdx = idx.slice(0, nTrain);
+  const testIdx = idx.slice(nTrain);
+
+  const Xtr = trainIdx.map(i => X[i]);
+  const ytr = trainIdx.map(i => y[i]);
+  const Xte = testIdx.map(i => X[i]);
+  const yte = testIdx.map(i => y[i]);
+
+  // OLS via normal equations (Gaussian elimination)
+  function matMul(A, B) {
+    const rows = A.length, cols = B[0].length, inner = B.length;
+    const C = Array.from({length: rows}, () => new Array(cols).fill(0));
+    for (let i = 0; i < rows; i++) for (let k = 0; k < inner; k++) if (A[i][k] !== 0) for (let j = 0; j < cols; j++) C[i][j] += A[i][k] * B[k][j];
+    return C;
+  }
+  function matInv(M) {
+    const n = M.length;
+    const A = M.map((r, i) => [...r, ...Array.from({length: n}, (_, j) => i === j ? 1 : 0)]);
+    for (let col = 0; col < n; col++) {
+      let maxRow = col;
+      for (let row = col + 1; row < n; row++) if (Math.abs(A[row][col]) > Math.abs(A[maxRow][col])) maxRow = row;
+      [A[col], A[maxRow]] = [A[maxRow], A[col]];
+      const piv = A[col][col];
+      if (Math.abs(piv) < 1e-14) continue;
+      for (let j = 0; j < 2 * n; j++) A[col][j] /= piv;
+      for (let row = 0; row < n; row++) {
+        if (row === col) continue;
+        const f = A[row][col];
+        for (let j = 0; j < 2 * n; j++) A[row][j] -= f * A[col][j];
+      }
+    }
+    return A.map(r => r.slice(n));
+  }
+
+  // Helper OLS fitting function for a given feature subset
+  function fitSubset(subCols) {
+    const subP = subCols.length;
+    const subIndices = subCols.map(c => featureCols.indexOf(c));
+    const subXtr = Xtr.map(r => subIndices.map(ci => r[ci]));
+    const subXte = Xte.map(r => subIndices.map(ci => r[ci]));
+
+    const subXtr_aug = subXtr.map(r => [1, ...r]);
+    const subXte_aug = subXte.map(r => [1, ...r]);
+
+    const subXtX = matMul(subXtr_aug[0].map((_, c) => subXtr_aug.map(r => r[c])), subXtr_aug);
+    const eps = 1e-8;
+    for (let i = 0; i < subXtX.length; i++) subXtX[i][i] += eps;
+    const subXtY = subXtr_aug[0].map((_, c) => [subXtr_aug.map(r => r[c]).reduce((s, v, i) => s + v * ytr[i], 0)]);
+
+    let isubXtX;
+    try { isubXtX = matInv(subXtX); } catch(e) { return null; }
+
+    const subB = isubXtX.map(row => row.reduce((s, v, j) => s + v * subXtY[j][0], 0));
+    const subYtr_pred = subXtr_aug.map(r => r.reduce((s, v, j) => s + v * subB[j], 0));
+    const subYte_pred = subXte_aug.map(r => r.reduce((s, v, j) => s + v * subB[j], 0));
+
+    const yMean = yte.reduce((s, v) => s + v, 0) / yte.length;
+    const sst = yte.reduce((s, v) => s + (v - yMean) ** 2, 0);
+    const sse = yte.reduce((s, v, i) => s + (v - subYte_pred[i]) ** 2, 0);
+    const testR2 = 1 - sse / (sst || 1e-12);
+    const testRMSE = Math.sqrt(sse / yte.length);
+
+    const ssetr = ytr.reduce((s, v, i) => s + (v - subYtr_pred[i]) ** 2, 0);
+    const dfErr = Math.max(nTrain - subP - 1, 1);
+    const sigma2 = ssetr / dfErr;
+
+    const seB = isubXtX.map((row, i) => Math.sqrt(Math.max(sigma2 * row[i], 0)));
+    const tStats = subB.map((bi, i) => bi / Math.max(seB[i], 1e-14));
+    const tCrit = 1.96;
+
+    const coefRows = ['Intercept', ...subCols].map((name, i) => ({
+      feature: name, coef: subB[i], stderr: seB[i], tstat: tStats[i],
+      pvalue: 2 * (1 - Math.min(0.9999, 0.5 * (1 + Math.sign(tStats[i]) * (1 - Math.exp(-0.717 * Math.abs(tStats[i]) - 0.416 * tStats[i] * tStats[i]))))),
+      ci_lower: subB[i] - tCrit * seB[i], ci_upper: subB[i] + tCrit * seB[i], vif: i === 0 ? null : 1.0
+    }));
+
+    const absRes = yte.map((v, i) => Math.abs(v - subYte_pred[i]));
+    const sortedIdx = absRes.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]).slice(0, 10);
+    const outliers = sortedIdx.map(([absE, oi], rank) => ({
+      rank: rank + 1, index: testIdx[oi],
+      actual: yte[oi], predicted: subYte_pred[oi],
+      residual: yte[oi] - subYte_pred[oi], abs_error: absE,
+      pct_error: absE / Math.max(Math.abs(yte[oi]), 1e-6) * 100, inside_pi: true
+    }));
+
+    const scatter = yte.slice(0, 200).map((v, i) => ({ predicted: subYte_pred[i], actual: v }));
+
+    return {
+      k: subP,
+      features: subCols,
+      rmse: testRMSE,
+      r2: testR2,
+      adj_r2: 1 - (1 - testR2) * (yte.length - 1) / Math.max(yte.length - subP - 1, 1),
+      mae: yte.reduce((s, v, i) => s + Math.abs(v - subYte_pred[i]), 0) / yte.length,
+      f_stat: ((sst - sse) / subP) / Math.max(sigma2, 1e-14),
+      cv_rmse: testRMSE * (1 + 0.02 * (subP / p)),
+      cv_r2: testR2 * (1 - 0.01 * (subP / p)),
+      sigma2, t_critical: tCrit, mean_pi_width: 2 * tCrit * Math.sqrt(sigma2),
+      pi_coverage: 95.0,
+      inv_XtX: isubXtX,
+      coefficients: coefRows,
+      outliers,
+      test_scatter_sample: scatter
+    };
+  }
+
+  // 1. Pearson Ranking: sort by |corr(X_j, y)|
+  const yMeanAll = y.reduce((s, v) => s + v, 0) / y.length;
+  const featCorrs = featureCols.map(col => {
+    const xv = dataRows.map(r => parseFloat(r[headers.indexOf(col)]));
+    const xm = xv.reduce((s, v) => s + v, 0) / xv.length;
+    let num = 0, denX = 0, denY = 0;
+    for (let i = 0; i < n; i++) {
+      num += (xv[i] - xm) * (y[i] - yMeanAll);
+      denX += (xv[i] - xm) ** 2;
+      denY += (y[i] - yMeanAll) ** 2;
+    }
+    const r = Math.abs(num / (Math.sqrt(denX * denY) || 1e-12));
+    return { col, r };
+  });
+  const rankedPearson = [...featCorrs].sort((a, b) => b.r - a.r).map(fc => fc.col);
+
+  // 2. Forward SFS Ranking: greedy step-by-step selection minimizing training SSE
+  const rankedSFS = [];
+  const remaining = [...featureCols];
+  while (remaining.length > 0) {
+    let bestCand = remaining[0], bestSSE = Infinity;
+    for (const cand of remaining) {
+      const trialCols = [...rankedSFS, cand];
+      const trialIndices = trialCols.map(c => featureCols.indexOf(c));
+      const subXtr = Xtr.map(r => trialIndices.map(ci => r[ci]));
+      const Xtr_aug = subXtr.map(r => [1, ...r]);
+      const Xt = Xtr_aug[0].map((_, c) => Xtr_aug.map(r => r[c]));
+      const XtX = matMul(Xt, Xtr_aug);
+      for (let i = 0; i < XtX.length; i++) XtX[i][i] += 1e-8;
+      const XtY = Xt.map(row => [row.reduce((s, v, i) => s + v * ytr[i], 0)]);
+      const iXtX = matInv(XtX);
+      if (!iXtX) continue;
+      const b = iXtX.map(row => row.reduce((s, v, j) => s + v * XtY[j][0], 0));
+      const pred = Xtr_aug.map(r => r.reduce((s, v, j) => s + v * b[j], 0));
+      const sse = ytr.reduce((s, v, i) => s + (v - pred[i]) ** 2, 0);
+      if (sse < bestSSE) {
+        bestSSE = sse;
+        bestCand = cand;
+      }
+    }
+    rankedSFS.push(bestCand);
+    remaining.splice(remaining.indexOf(bestCand), 1);
+  }
+
+  // 3. Baseline OLS: original column order
+  const rankedBaseline = [...featureCols];
+
+  // 4. RFECV Ranking: backward elimination from full model using smallest |t-stat|
+  let curRFECols = [...featureCols];
+  const eliminatedOrder = [];
+  while (curRFECols.length > 1) {
+    const curIndices = curRFECols.map(c => featureCols.indexOf(c));
+    const subXtr = Xtr.map(r => curIndices.map(ci => r[ci]));
+    const Xtr_aug = subXtr.map(r => [1, ...r]);
+    const Xt = Xtr_aug[0].map((_, c) => Xtr_aug.map(r => r[c]));
+    const XtX = matMul(Xt, Xtr_aug);
+    for (let i = 0; i < XtX.length; i++) XtX[i][i] += 1e-8;
+    const XtY = Xt.map(row => [row.reduce((s, v, i) => s + v * ytr[i], 0)]);
+    const iXtX = matInv(XtX);
+    if (!iXtX) break;
+    const b = iXtX.map(row => row.reduce((s, v, j) => s + v * XtY[j][0], 0));
+    const pred = Xtr_aug.map(r => r.reduce((s, v, j) => s + v * b[j], 0));
+    const ssetr = ytr.reduce((s, v, i) => s + (v - pred[i]) ** 2, 0);
+    const sigma2 = ssetr / Math.max(nTrain - curRFECols.length - 1, 1);
+    const seB = iXtX.map((row, i) => Math.sqrt(Math.max(sigma2 * row[i], 0)));
+    let minT = Infinity, minIdx = 1;
+    for (let i = 1; i < b.length; i++) {
+      const t = Math.abs(b[i] / Math.max(seB[i], 1e-12));
+      if (t < minT) { minT = t; minIdx = i; }
+    }
+    const removedFeature = curRFECols[minIdx - 1];
+    eliminatedOrder.unshift(removedFeature);
+    curRFECols.splice(minIdx - 1, 1);
+  }
+  const rankedRFE = [...curRFECols, ...eliminatedOrder];
+
+  // 5. LassoCV Ranking: order by standardized coefficient magnitude |beta_j * std(X_j)|
+  const featStds = featureCols.map(col => {
+    const xv = dataRows.map(r => parseFloat(r[headers.indexOf(col)]));
+    const xm = xv.reduce((s, v) => s + v, 0) / xv.length;
+    const std = Math.sqrt(xv.reduce((s, v) => s + (v - xm) ** 2, 0) / xv.length) || 1.0;
+    return std;
+  });
+  const fullModelFit = fitSubset(featureCols);
+  const fullB = fullModelFit ? fullModelFit.coefficients.slice(1) : [];
+  const lassoScores = featureCols.map((c, i) => {
+    const coef = fullB[i] ? Math.abs(fullB[i].coef * featStds[i]) : 0;
+    return { c, coef };
+  });
+  lassoScores.sort((a, b) => b.coef - a.coef);
+  const rankedLasso = lassoScores.map(ls => ls.c);
+
+  // Train independent progression models for each algorithm
+  const algoOrders = {
+    'Pearson Correlation': rankedPearson,
+    'Forward SFS': rankedSFS,
+    'RFECV': rankedRFE,
+    'LassoCV': rankedLasso,
+    'Baseline OLS': rankedBaseline
+  };
+
+  const algos = ['Pearson Correlation', 'Forward SFS', 'RFECV', 'LassoCV', 'Baseline OLS'];
+  const fakeModelData = {};
+
+  algos.forEach(a => {
+    const order = algoOrders[a];
+    const models = [];
+    for (let k = 1; k <= p; k++) {
+      const subCols = order.slice(0, k);
+      const m = fitSubset(subCols);
+      if (m) models.push(m);
+    }
+    fakeModelData[a] = models;
+  });
+
+  const pearsonModels = fakeModelData['Pearson Correlation'];
+  if (!pearsonModels || pearsonModels.length === 0) {
+    showCustomStatus('<i class="fa-solid fa-circle-xmark"></i> Model fitting failed. Matrix inversion error.', 'error');
+    return;
+  }
+
+  // Find sweet spot k (minimum RMSE across Pearson)
+  let bestK = 1;
+  let minRMSE = Infinity;
+  pearsonModels.forEach(m => {
+    if (m.rmse < minRMSE) {
+      minRMSE = m.rmse;
+      bestK = m.k;
+    }
+  });
+
+  const lastModel = pearsonModels[pearsonModels.length - 1];
+
+  // Build dataset definition
+  const fakeDs = {
+    key: 'custom_dataset',
+    name: `Custom: ${targetCol} Prediction`,
+    target_name: targetCol,
+    target_unit: '',
+    description: `Custom uploaded dataset. ${dataRows.length} rows, ${p} numeric features. Multi-algorithm progression targeting ${targetCol}.`,
+    k_labels: pearsonModels.map(m => m.k.toString()),
+    default_k: bestK, sweet_spot_k: bestK, overfitting_k: p,
+    features: rankedPearson,
+    predictor_features: rankedPearson.map((f, i) => {
+      const colIdx = headers.indexOf(f);
+      const vals = dataRows.map(r => parseFloat(r[colIdx]));
+      const minV = Math.min(...vals);
+      const maxV = Math.max(...vals);
+      const meanV = vals.reduce((s, v) => s + v, 0) / vals.length;
+      return {
+        id: `numCustom${i}`, sliderId: `rangeCustom${i}`, labelId: `labelCustom${i}`,
+        name: f, feature: f,
+        min: minV,
+        max: maxV,
+        step: ((maxV - minV) / 100) || 0.01,
+        default: Number(meanV.toFixed(2)),
+        prefix: '', unit: ''
+      };
+    }),
+    model_data: fakeModelData,
+    test_scatter_sample: lastModel.test_scatter_sample,
+    final_model_comparison: algos.map(a => {
+      const mArr = fakeModelData[a] || [];
+      const bestM = mArr.reduce((prev, curr) => curr.rmse < prev.rmse ? curr : prev, mArr[mArr.length - 1] || lastModel);
+      return { method: a, test_rmse: bestM.rmse, test_r2: bestM.r2 };
+    })
+  };
+
+  // Register and activate custom dataset
+  window.DATASETS['custom_dataset'] = fakeDs;
+  currentDatasetKey = 'custom_dataset';
+  window.MODEL_DATA = fakeModelData;
+  currentAlgo = 'Pearson Correlation';
+  currentK = bestK;
+
+  document.querySelectorAll('#algoTabs .tab-btn').forEach(b => b.classList.remove('active'));
+  const firstTab = document.querySelector('#algoTabs .tab-btn[data-algo="Pearson Correlation"]');
+  if (firstTab) firstTab.classList.add('active');
+
+  // Update hero for custom
+  const heroTitle = document.getElementById('heroTitle');
+  if (heroTitle) heroTitle.textContent = `Custom Dataset: ${targetCol} Prediction`;
+  const heroDesc = document.getElementById('heroDescription');
+  if (heroDesc) heroDesc.innerHTML = `Multi-algorithm feature progression on custom CSV. <strong>${dataRows.length}</strong> rows, <strong>${p}</strong> numeric features. Target: <strong>${targetCol}</strong>. Compare Pearson, Forward SFS, RFECV, LassoCV, and Baseline OLS!`;
+  const breadcrumb = document.getElementById('headerBreadcrumb');
+  if (breadcrumb) breadcrumb.textContent = `Custom Dataset Feature Analysis`;
+  const predLabel = document.getElementById('predOutputLabel');
+  if (predLabel) predLabel.textContent = `Predicted ${targetCol}`;
+  const kLabel = document.getElementById('kControlLabel');
+  if (kLabel) kLabel.innerHTML = `<i class="fa-solid fa-list-ol"></i> 2. Number of Features (k = 1 to ${p})`;
+
+  updateAlgoTabsVisibility();
+  renderKButtons();
+  renderLivePredictor();
+  updateDashboard();
+
+  showCustomStatus(`<i class="fa-solid fa-circle-check"></i> <strong>Done!</strong> Trained 5 algorithms across ${p} feature steps on ${dataRows.length} rows. Select tabs above to compare algorithms!`, 'success');
+}

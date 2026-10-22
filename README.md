@@ -1,7 +1,7 @@
 # 🎓 HW2: Multiple Linear Regression & Feature Selection Explorer
 ### 學生表現預測機器學習挑戰（CRISP-DM 完整流程與統計推論分析）
 
-> 🌐 **GitHub Pages 互動式網站：** [https://yuwen0621.github.io/1014_DIC/](https://yuwen0621.github.io/1014_DIC/)  
+> 🌐 **GitHub Pages 互動式網站：** [https://yuwen0621.github.io/1014hw2_Bonus/](https://yuwen0621.github.io/1014hw2_Bonus/) 
 > 📦 **Kaggle 資料集來源：** [Student Performance Prediction Machine Learning Challenge](https://www.kaggle.com/competitions/student-performance-prediction-machine-learning-challenge/data)  
 > 🏫 **課程：** 資料推論與計算 (Data Inference & Computing, DIC) — 作業二：多元線性迴歸 (Multiple Linear Regression)
 

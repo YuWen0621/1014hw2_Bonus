@@ -3,7 +3,7 @@
 
 > 🌐 **GitHub Pages 互動式網站：** [https://yuwen0621.github.io/1014hw2_Bonus/](https://yuwen0621.github.io/1014hw2_Bonus/)  
 > 📦 **Kaggle 資料集來源：** [Student Performance Prediction Machine Learning Challenge](https://www.kaggle.com/competitions/student-performance-prediction-machine-learning-challenge/data)  
-> 🏫 **課程：** 資料推論與計算 (Data Inference & Computing, DIC) — 作業二：多元線性迴歸 (Multiple Linear Regression)
+> 🏫 **課程：** 資料推論與計算 (Data Inference & Computing) — 作業二：多元線性迴歸 (Multiple Linear Regression)
 
 🦖**已完成兩個加分項目：**
 
@@ -200,7 +200,7 @@ $$\begin{aligned}
 
 ## 💻 6. 網站功能與互動操作 (Web Application)
 
-使用者可透過瀏覽器造訪 [GitHub Pages 網站](https://yuwen0621.github.io/1014_DIC/) 進行以下操作：
+使用者可透過瀏覽器造訪 [GitHub Pages 網站](https://yuwen0621.github.io/1014hw2_Bonus/) 進行以下操作：
 
 1. **演算法切換與最佳 $k$ 動態連動：**
    - 點選頂端 6 大特徵選取標籤（Pearson、Forward SFS、LassoCV 等）或「🌟 Compare All 6 Methods」。
@@ -239,7 +239,7 @@ $$\begin{aligned}
 - **Problem 1 (預設)：Student Performance Challenge**
   - 資料集來源：Kaggle Student Performance Dataset (16,000 筆樣本、17 個候選特徵)。
   - 預測目標：學生連續學習生產力分數 `productivity_score` (0–100)。
-  - 特色：保留原始 DIC 作業所有功能，展示 6 大演算法在 $k=1 \dots 17$ 維度下的選取曲線、LassoCV $k=6$ Sweet Spot 與生活型態 Live Predictor。
+  - 特色：保留作業二所有功能，展示 6 大演算法在 $k=1 \dots 17$ 維度下的選取曲線、LassoCV $k=6$ Sweet Spot 與生活型態 Live Predictor。
 - **Problem 2：Parkinson's Telemonitoring (帕金森氏症遠距聲學遠程監控)**
   - 資料集來源：[UCI Machine Learning Repository: Parkinson's Telemonitoring Dataset](https://archive.ics.uci.edu/dataset/189/parkinsons+telemonitoring)（公開資料集）。
   - **合規性檢核**：

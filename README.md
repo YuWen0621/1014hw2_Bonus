@@ -16,6 +16,9 @@ Advertising（Sales）
 https://raw.githubusercontent.com/JWarmenhoven/ISLR-python/master/Notebooks/Data/Advertising.csv
 Auto MPG（mpg）
 https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv
+<img width="1896" height="651" alt="螢幕擷取畫面 2026-10-22 153611" src="https://github.com/user-attachments/assets/16e54ec6-ab9b-4750-8bfe-360cf1fea800" />
+<img width="1917" height="866" alt="螢幕擷取畫面 2026-10-22 153621" src="https://github.com/user-attachments/assets/f3f72108-2537-4fd0-a4e7-5093293e505e" />
+
 ---
 
 ## 📌 1. 專案簡介 (Project Overview)

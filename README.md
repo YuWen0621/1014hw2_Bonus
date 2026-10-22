@@ -14,7 +14,7 @@
 ### 核心目標
 1. **預測目標：** 預測學生的連續型學習生產力指標 **`productivity_score`**（範圍 $0.0 - 100.0$）。
 2. **比較特徵選取方法：** 系統性比較 **6 種機器學習特徵選取演算法** 在特徵維度 $k = 1 \dots 17$ 逐步遞增下的預測表現與泛化能力。
-3. **奧坎剃刀原則 (Occam's Razor)：** 探討偏差-變異數權衡（Bias-Variance Tradeoff），鎖定兼顧模型簡約性與最高預測力的 **Sweet Spot（最佳特徵子集）**。
+
 4. **個別樣本預測不確定性估計：** 推導並計算學生個別預測值的 **95% 預測區間（95% Prediction Interval, PI）**，區分個別預測區間與平均值信心區間（Confidence Interval）的統計差異。
 5. **雲端互動部署：** 開發符合 GitHub Pages 原生環境的無後端（Serverless）互動式 Web 儀表板，支援即時特徵調控、動態甜點標示、Progression 圖表切換與 Live Predictor 試算。
 
@@ -256,6 +256,18 @@ $$\begin{aligned}
     - 儀表板動態更新：全站 KPI 卡片、實測 vs 預測散布圖、迴歸方程式以及 Live Predictor 立即轉換為使用者上傳的自訂資料集！
 
 ---
+
+### 3. 【加總分 1分】Boston Housing（第二資料集）
+- 新增第二個資料集 **Boston Housing**，使用者可透過下拉選單切換並查看完整分析結果。
+
+### 4. 【加總分 2分】Custom Dataset 使用方式
+- 支援任意輸入 Dataset（公開 CSV 網址或上傳檔案），自行選擇 Target 並執行回歸分析。
+- 使用步驟：選擇 **Custom Dataset** → 輸入 CSV URL → **Fetch & Preview** → 選擇 Target → **Run Regression Analysis**。
+- 測試 CSV 例子：
+  - Advertising（Sales）[https://raw.githubusercontent.com/JWarmenhoven/ISLR-python/master/Notebooks/Data/Advertising.csv](https://raw.githubusercontent.com/JWarmenhoven/ISLR-python/master/Notebooks/Data/Advertising.csv)
+  - Auto MPG（mpg）[https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv](https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv)
+
+
 
 ## 💻 7. 專案目錄結構與本機執行 (Project Structure & Usage)
 

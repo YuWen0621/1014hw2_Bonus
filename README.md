@@ -5,7 +5,7 @@
 > 📦 **Kaggle 資料集來源：** [Student Performance Prediction Machine Learning Challenge](https://www.kaggle.com/competitions/student-performance-prediction-machine-learning-challenge/data)  
 > 🏫 **課程：** 資料推論與計算 (Data Inference & Computing, DIC) — 作業二：多元線性迴歸 (Multiple Linear Regression)
 
-> 🦖**已完成兩個加分項目：**
+🦖**已完成兩個加分項目：**
 
 Boston Housing：新增第二個資料集，可透過下拉選單切換並查看完整分析結果。
 

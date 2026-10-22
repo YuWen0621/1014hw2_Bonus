@@ -3,8 +3,18 @@
 
 > 🌐 **GitHub Pages 互動式網站：** [https://yuwen0621.github.io/1014hw2_Bonus/](https://yuwen0621.github.io/1014hw2_Bonus/)  
 > 📦 **Kaggle 資料集來源：** [Student Performance Prediction Machine Learning Challenge](https://www.kaggle.com/competitions/student-performance-prediction-machine-learning-challenge/data)  
-> 🏫 **課程：** 資料推論與計算 (Data Inference & Computing, DIC) — 作業二：多元線性迴歸 (Multiple Linear Regression)
+> 🏫 **課程：** 資料推論與計算 (Data Inference & Computing, DIC) — 作業二：多元線性迴歸 (Multiple Linear Regression)  
+🦖已完成兩個加分項目：
 
+Boston Housing：新增第二個資料集，可透過下拉選單切換並查看完整分析結果。
+
+Custom Dataset： 支援可任意輸入 Dataset (公開 CSV 網址或上傳檔案)，自行選擇 Target 並執行回歸分析。
+
+Custom 使用方式： 選擇 Custom Dataset → 輸入 CSV URL → Fetch & Preview → 選擇 Target → Run Regression Analysis。
+Advertising（Sales）
+https://raw.githubusercontent.com/JWarmenhoven/ISLR-python/master/Notebooks/Data/Advertising.csv
+Auto MPG（mpg）
+https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv
 ---
 
 ## 📌 1. 專案簡介 (Project Overview)
